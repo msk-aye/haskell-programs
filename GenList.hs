@@ -6,9 +6,9 @@ module GenList (GenList (..)) where
 You are familiar with the standard recursive definition of Lists:
 
             The container holding the rest of the elements (also a list)
-                                vvvvvv
+                                   |
     data List a = Nil | Cons a (List a)
-                             ^
+                             |
                 The element held by the node
 
 We can generalise this definition and change its structure a little bit
@@ -21,23 +21,20 @@ replacing the inner container from List with an arbitrary type:
             The rest of the elements are now held in an abstract container f
 
 To make it look like a regular list, we need to provide a container that holds
-a pair of elements:
-    one will hold the current element while the second will hold the "tail".
+a pair of elements: one will hold the current element while the second will
+hold the "tail".
 
-    data Pair a = Pair a a
+data Pair a = Pair a a
 
-    type List a = GenList Pair a
+type List a = GenList Pair a
 
-In this case, a list [1, 2, 3, 4] will look like:
-
-    GenList (Pair (End 1) (GenList (Pair (End 2)
-                (GenList (Pair (End 3) (End 4))))))
+In this case, a list [1, 2, 3, 4] will look like
+GenList (Pair (End 1) (GenList (Pair (End 2) (GenList (Pair (End 3) (End 4)))))
 
 Pair can also be used to construct binary trees.
-
 We can construct arbitrary trees by replacing Pair with a standard list.
 
-    type Tree a = GenList [] a
+type Tree a = GenList [] a
 
 In this case, one of the trees from Fruits from A2 will look like
 
@@ -54,13 +51,14 @@ GenList [ End 3
                   ]
         ]
 
+
 Your task will be to define Functor, Applicative and Monad instances for this
 type, given that the inner container is a Functor.
 
 The expected behaviour of Applicative and Monad resembles that of List:
 
 -- A structure resembling the list [3, 4, 5] if you squint enough
---
+
 tree = GenList [ End 3
                , GenList [ End 4
                          , End 5
@@ -84,42 +82,49 @@ which, again, resembles the result of
 if you squint enough.
 
 
-
 And the same goes for Applicative:
 
 t1 = GenList [ End 1, End 2 ]
 t2 = GenList [ GenList [End 3], End 4, GenList [End 5]]
 
 (+) <$> t1 <*> t2 == GenList [GenList [GenList [End 4],End 5,GenList [End 6]],
-                        GenList [GenList [End 5],End 6,GenList [End 7]]]
+                              GenList [GenList [End 5],End 6,GenList [End 7]]]
 
 (+) <$> [1, 2] <*> [3, 4, 5] == [4,5,6,5,6,7]
 
 
 The funny thing (if you share our definition of fun) is that you only need f to
-    be a Functor to define these instances.
+be a Functor to define these instances.
 
 A general hint is, please, make use of this fact!
 
 This problem is worth 10 POINTS.
-
 --}
 
 data GenList f a = End a | GenList (f (GenList f a))
 
 deriving instance (Show a, Show (f (GenList f a))) => Show (GenList f a)
 
--- Your implementation goes below
---
+instance (Functor f) => Monad (GenList f) where
+    -- return :: Functor f => a -> GenList f a
+    return = pure
+
+    -- (>>=) :: Functor f => GenList f a -> (a -> GenList f b) -> GenList f b
+    (>>=) (GenList a) fagb = GenList $ fmap (>>= fagb) a
+    (>>=) (End a) fagb = fagb a
+
 instance Functor f => Functor (GenList f) where
-    fmap = undefined
-
-instance Functor f => Monad (GenList f) where
-    return = undefined
-
-    (>>=) = undefined
+    -- fmap :: Functor f => (a -> b) -> GenList f a -> GenList f b
+    fmap f g = do
+        a <- g
+        pure $ f a
 
 instance Functor f => Applicative (GenList f) where
-    pure = undefined
+    -- pure :: Functor f => a -> GenList f a
+    pure = End
 
-    (<*>) = undefined
+    -- (<*>) :: Functor f => GenList f (a -> b) -> GenList f a -> GenList f b
+    (<*>) fs xs = do
+        f <- fs
+        x <- xs
+        pure $ f x
