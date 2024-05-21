@@ -1,4 +1,5 @@
-module Parser (Polynomial(..), polynomial, parse, expand, simplify) where
+module Parser 
+    (Polynomial(..), Parser (..), polynomial, parse, expand, simplify) where
 
 import           Control.Applicative
 
@@ -95,9 +96,6 @@ Just (Mul (Mono 1 1) (Mul (Mono 1 1) (Mono 1 1)),"")
 Just (Mono 1 1,"")
 
 This task is worth 10 POINTS.
-
-The part you need to implement starts on the line 242.
-
 --}
 
 --  start: DO NOT MODIFY --
@@ -106,19 +104,21 @@ type Deg = Integer   -- precondition: always nonnegative.
 type Coeff = Integer -- precondition: always nonnegative.
 
 data Polynomial = Mono Coeff Deg | Add Polynomial Polynomial 
-                    | Mul Polynomial Polynomial deriving (Eq)
+                                 | Mul Polynomial Polynomial deriving (Eq)
 
 -- expand and simplify from A2
+
 expand :: Polynomial -> Polynomial
 expand (Mono c d) = Mono c d
 expand (Add f g) = Add (expand f) (expand g)
 expand (Mul (Mono c0 d0) (Mono c1 d1)) = Mono (c0*c1) (d0+d1)
-expand (Mul (Add f g) h) = Add (expand $ Mul f h) (expand $ Mul g h)
-expand (Mul f (Add g h)) = Add (expand $ Mul f g) (expand $ Mul f h)
+expand (Mul (Add f g) h) = Add (expand $ Mul f h) (expand $ Mul g h)  -- right
+expand (Mul f (Add g h)) = Add (expand $ Mul f g) (expand $ Mul f h)  -- left
 expand (Mul f g) = expand $ Mul (expand f) (expand g)
 
 
 -- simplified polynomial is returned in descending degree
+
 simplify :: Polynomial -> Polynomial
 simplify (Mono c d) = Mono c d
 simplify (Add g h)  = merge' (simplify g) (simplify h)
@@ -126,6 +126,7 @@ simplify f          = simplify $ expand f
 
 
 -- Precondition: input is simplified
+
 merge' :: Polynomial -> Polynomial -> Polynomial
 merge' (Mono a b) (Mono c d)
     | b > d      = Add (Mono a b) (Mono c d)
@@ -234,11 +235,92 @@ symbol :: String -> Parser String
 symbol xs = token $ string xs
 
 -- end DO NOT MODIFY --
-
 -- Your code goes below
 
-instance Show Polynomial where
-    show = undefined
+-- Polynom ::= Factors "+" Polynom | Factors
+--
+-- Factors ::= Factor Factors | Factor
+--
+-- Factor ::= "(" Polynom ")" | Mono
+--
+-- Mono ::= Constant "x" "^" Constant
+--          | "x" "^" Constant
+--          | Constant "x"
+--          | "x"
+--          | Constant
+--
+-- Constant ::= 0 | 1 | 2 | ...
 
+instance Show Polynomial where
+    show (Mono c 0) = show c
+    show (Mono 0 _) = show 0
+    show (Mono 1 1) = "x"
+    show (Mono c 1) = show c ++ "x"
+    show (Mono 1 d) = "x^" ++ show d
+    show (Mono c d) = show c ++ "x^" ++ show d
+    show (Add f g) = show f ++ " + " ++ show g
+    show (Mul (Mul f a) (Mul g b)) = show (Mul f a) ++ show (Mul g b)
+    show (Mul (Mul f a) g) = show (Mul f a) ++ "(" ++ show g ++ ")"
+    show (Mul f (Mul g a)) = "(" ++ show f ++ ")" ++ show (Mul g a)
+    show (Mul f g) = "(" ++ show f ++ ")" ++ "(" ++ show g ++ ")"
+
+-- Polynom ::= Factors "+" Polynom | Factors
 polynomial :: Parser Polynomial
-polynomial = undefined
+polynomial = do
+    f <- factors
+    token $ char '+'
+    p <- polynomial
+    return $ Add f p
+    <|>
+    factors
+
+-- Factors ::= Factor Factors | Factor
+factors :: Parser Polynomial
+factors = do
+    f <- factor
+    fs <- factors
+    return $ Mul f fs
+    <|> 
+    factor
+
+-- Factor ::= "(" Polynom ")" | Mono
+factor :: Parser Polynomial
+factor = do
+    token $ char '('
+    p <- polynomial
+    token $ char ')'
+    return p
+    <|>
+    mono
+
+-- Mono ::= Constant "x" "^" Constant | "x" "^" Constant
+--          | Constant "x" | "x" | Constant
+mono :: Parser Polynomial
+mono = do
+    c <- token nat
+    token $ char 'x'
+    token $ char '^'
+    d <- token nat
+    return $ Mono c d
+    <|>
+    do
+      token $ char 'x'
+      token $ char '^'
+      d <- token nat
+      return $ Mono 1 d
+    <|>
+    do
+      c <- token nat
+      token $ char 'x'
+      return $ Mono c 1
+    <|>
+    do
+      token $ char 'x'
+      return $ Mono 1 1
+    <|>
+    constant
+
+constant :: Parser Polynomial
+constant = do
+  x <- token nat
+  return $ Mono x 0
